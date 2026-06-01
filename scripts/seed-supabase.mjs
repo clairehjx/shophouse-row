@@ -18,7 +18,7 @@ const ROSTER = [
   ['iris', 'Iris', 'toy'], ['grace', 'Grace', 'bakery'], ['jeanette', 'Jeanette', 'music'],
   ['claireh', 'Claire H.', 'bookshop'], ['chloe', 'Chloe', 'craft'], ['clairey', 'Claire Y.', 'grocer'],
   ['vera', 'Vera', 'florist'], ['keira', 'Keira', 'snowglobe'], ['laura', 'Laura', 'sweet'],
-  ['sharmaine', 'Sharmaine', 'garden'],
+  ['sharmaine', 'Sharmaine', 'garden'], ['caleb', 'Caleb', 'car'],
 ];
 
 // Keep only the scheme+host (drops trailing slash, /rest/v1, or any path).
@@ -44,8 +44,16 @@ if (role !== 'service_role') {
 }
 const db = createClient(url, key, { auth: { persistSession: false } });
 
+// Only seed players that don't already exist — re-running safely ADDS new players
+// (e.g. Caleb) without resetting anyone's shop/inventory/progress.
+const { data: existingRows } = await db.from('players').select('id');
+const have = new Set((existingRows || []).map((p) => p.id));
+const toSeed = ROSTER.filter(([id]) => !have.has(id));
+if (toSeed.length === 0) { console.log('All players already exist — nothing to add.'); process.exit(0); }
+console.log('Adding new players:', toSeed.map(([id]) => id).join(', '));
+
 const players = [], codes = [], shops = [], inventory = [];
-ROSTER.forEach(([id, name, shopType], i) => {
+toSeed.forEach(([id, name, shopType], i) => {
   const type = SHOP_TYPE_MAP[shopType];
   players.push({ id, name, name_lower: name.toLowerCase(), shop_type: shopType, is_admin: id === 'claireh', setup_complete: true, avatar: id === 'claireh' ? CLAIRE_AVATAR : randomAvatar((i + 1) / 14) });
   codes.push({ player_id: id, code_hash: bcrypt.hashSync(id, 10) }); // default code = id
