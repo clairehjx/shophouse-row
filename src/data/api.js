@@ -4,10 +4,10 @@
 import * as localStore from './localStore.js';
 import * as cloudStore from './cloudStore.js';
 
-// `import.meta.env && import.meta.env.VITE_SUPABASE_URL` so Vite statically inlines
-// the flag at build (the `.VITE_SUPABASE_URL` form it replaces) while staying safe
-// under plain Node tooling (the `&&` short-circuits when import.meta.env is undefined).
-const store = (import.meta.env && import.meta.env.VITE_SUPABASE_URL) ? cloudStore : localStore;
+// Production builds (Vercel) use the Supabase-backed cloud store; `npm run dev` uses
+// the local-first store. The client only calls relative /api/* endpoints, so it needs
+// no Supabase env var — just Vite's built-in PROD flag (guarded for plain Node tooling).
+const store = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.PROD) ? cloudStore : localStore;
 
 export const api = {
   // auth
