@@ -4,7 +4,10 @@
 import * as localStore from './localStore.js';
 import * as cloudStore from './cloudStore.js';
 
-const store = import.meta.env?.VITE_SUPABASE_URL ? cloudStore : localStore;
+// `import.meta.env && import.meta.env.VITE_SUPABASE_URL` so Vite statically inlines
+// the flag at build (the `.VITE_SUPABASE_URL` form it replaces) while staying safe
+// under plain Node tooling (the `&&` short-circuits when import.meta.env is undefined).
+const store = (import.meta.env && import.meta.env.VITE_SUPABASE_URL) ? cloudStore : localStore;
 
 export const api = {
   // auth
