@@ -9,3 +9,6 @@ dist
 # Local-only dev notes (placeholder secret codes etc.) — never commit
 DEV-NOTES.md
 .vercel
+
+# Invitation cards contain per-friend secret codes — never commit (repo is public)
+invites/
