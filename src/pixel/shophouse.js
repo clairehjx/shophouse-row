@@ -22,6 +22,18 @@ export const SHOP_TYPES = [
 
 export const SHOP_TYPE_MAP = Object.fromEntries(SHOP_TYPES.map((s) => [s.key, s]));
 
+// Fixed left→right street order (Claire H. & Chloe centred among the 13). The Street
+// sorts players by this so positions are static in both local and cloud backends.
+export const STREET_ORDER = [
+  'jean', 'yiran', 'yifei', 'iris', 'grace', 'jeanette',
+  'claireh', 'chloe',
+  'clairey', 'vera', 'keira', 'laura', 'sharmaine',
+];
+export const streetIndex = (id) => {
+  const i = STREET_ORDER.indexOf(id);
+  return i < 0 ? STREET_ORDER.length : i; // unknown ids go to the end
+};
+
 // Awning recolour options offered in the facade editor.
 export const AWNING_COLORS = [
   '#f1a7b8', '#e89aa5', '#e2604f', '#f4a96b', '#f6c875', '#9ed66b',

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import PixelCanvas from '../components/PixelCanvas.jsx';
-import { drawShophouse, SHOP_W, SHOP_H, SHOP_TYPE_MAP } from '../pixel/shophouse.js';
+import { drawShophouse, SHOP_W, SHOP_H, SHOP_TYPE_MAP, streetIndex } from '../pixel/shophouse.js';
 import { drawAvatar, AVATAR_SIZE } from '../pixel/avatar.js';
 import { px } from '../pixel/engine.js';
 import { resolveItem, SHOP_SIGNATURE_SPRITE } from '../pixel/items.js';
@@ -35,8 +35,9 @@ export default function Street({ session, onSelectShop, startAtId }) {
   useEffect(() => {
     let alive = true;
     (async () => {
-      const [ps, ss] = await Promise.all([api.listPlayers(), api.listShops()]);
+      const [raw, ss] = await Promise.all([api.listPlayers(), api.listShops()]);
       if (!alive) return;
+      const ps = [...raw].sort((a, b) => streetIndex(a.id) - streetIndex(b.id)); // static positions
       setPlayers(ps);
       playersRef.current = ps;
       setShops(Object.fromEntries(ss.map((s) => [s.ownerId, s])));
