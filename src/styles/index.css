@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: 'Nunito', system-ui, sans-serif;
+  color: #4a3a2e;
+  /* Soft cozy sky gradient behind everything */
+  background: linear-gradient(180deg, #dcf1f7 0%, #bfe3f0 45%, #cdeede 100%);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+/* Every canvas in the game is crisp pixel art */
+canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+@layer components {
+  .pixel-text {
+    font-family: 'Silkscreen', monospace;
+    letter-spacing: 0.5px;
+  }
+
+  /* Soft parchment panel with a chunky pixel-ish border */
+  .panel {
+    @apply bg-paper rounded-2xl border-[3px] border-parch shadow-panel;
+  }
+
+  .cozy-btn {
+    @apply pixel-text text-sm px-5 py-3 rounded-xl border-[3px] transition
+           active:translate-y-[3px] active:shadow-none select-none;
+  }
+  .cozy-btn-primary {
+    @apply cozy-btn bg-peach border-[#d98a4f] text-paper shadow-cozy hover:brightness-105;
+  }
+  .cozy-btn-ghost {
+    @apply cozy-btn bg-paper border-parch text-inksoft hover:bg-cream;
+  }
+}
+
+/* Gentle scroll-reveal helper (IntersectionObserver toggles .is-in) */
+.reveal {
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+.reveal.is-in {
+  opacity: 1;
+  transform: none;
+}
+
+/* Float bob for avatars / signs */
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-3px); }
+}
+.bob { animation: bob 2.4s ease-in-out infinite; }
+
+/* Gentle fade-in when switching screens (opacity only — safe for layout) */
+@keyframes screenIn { from { opacity: 0; } to { opacity: 1; } }
+.screen-in { animation: screenIn 0.32s ease; }
+
+/* Eat / sip animation: the avatar chews while the food floats up to its mouth */
+@keyframes chew {
+  0%, 100% { transform: scaleY(1); }
+  25% { transform: scaleY(0.86) translateY(3px); }
+  50% { transform: scaleY(1.05); }
+  75% { transform: scaleY(0.9) translateY(2px); }
+}
+.chew { animation: chew 0.28s ease-in-out 4; transform-origin: center bottom; }
+
+@keyframes biteUp {
+  0%   { transform: translateY(28px) scale(1);   opacity: 0; }
+  15%  { opacity: 1; }
+  70%  { transform: translateY(-8px) scale(0.5); opacity: 1; }
+  100% { transform: translateY(-8px) scale(0.12); opacity: 0; }
+}
+.bite-up { animation: biteUp 1.1s ease-in forwards; }
+
+@keyframes sipUp {
+  0%   { transform: translateY(28px) rotate(0deg) scale(1);   opacity: 0; }
+  15%  { opacity: 1; }
+  60%  { transform: translateY(-4px) rotate(-14deg) scale(0.8); opacity: 1; }
+  100% { transform: translateY(-4px) rotate(-20deg) scale(0.7); opacity: 0; }
+}
+.sip-up { animation: sipUp 1.1s ease-in forwards; }

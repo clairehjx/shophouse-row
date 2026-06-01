@@ -1,0 +1,142 @@
+// Shared server helpers for the Vercel serverless functions (Phase 5 cloud backend).
+// DORMANT until the Supabase env vars are set — see PHASE5.md. Files prefixed with
+// "_" are not treated as routes by Vercel.
+import { createClient } from '@supabase/supabase-js';
+import jwt from 'jsonwebtoken';
+
+const ONLINE_WINDOW = 5 * 60 * 1000;
+
+export function sb() {
+  const url = (process.env.SUPABASE_URL || '').trim().replace(/^(https:\/\/[^/]+).*$/i, '$1');
+  return createClient(url, (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim(), { auth: { persistSession: false } });
+}
+export function signToken(playerId) {
+  return jwt.sign({ sub: playerId }, process.env.JWT_SECRET, { expiresIn: '60d' });
+}
+export function verifyToken(req) {
+  const h = req.headers.authorization || '';
+  const t = h.startsWith('Bearer ') ? h.slice(7) : null;
+  if (!t) return null;
+  try { return jwt.verify(t, process.env.JWT_SECRET).sub; } catch { return null; }
+}
+export async function readJson(req) {
+  if (req.body && typeof req.body === 'object') return req.body;
+  let raw = '';
+  for await (const c of req) raw += c;
+  try { return JSON.parse(raw || '{}'); } catch { return {}; }
+}
+
+const nid = (p) => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+export const mapPlayer = (p) => ({
+  id: p.id, name: p.name, shopType: p.shop_type, isAdmin: p.is_admin,
+  setupComplete: p.setup_complete, avatar: p.avatar,
+  online: p.last_seen_at ? (Date.now() - new Date(p.last_seen_at).getTime() < ONLINE_WINDOW) : false,
+});
+const mapShop = (s) => s && ({
+  ownerId: s.owner_id, signText: s.sign_text, awningColor: s.awning_color, wallColor: s.wall_color,
+  roofColor: s.roof_color, facadeItem: s.facade_item, greeting: s.greeting,
+  interior: s.interior || [], interior2: s.interior2 || [],
+});
+
+async function invAdd(db, playerId, itemId, qty) {
+  const { data } = await db.from('inventory').select('qty').eq('player_id', playerId).eq('item_id', itemId).maybeSingle();
+  if (data) await db.from('inventory').update({ qty: data.qty + qty }).eq('player_id', playerId).eq('item_id', itemId);
+  else await db.from('inventory').insert({ player_id: playerId, item_id: itemId, qty });
+}
+async function invRemove(db, playerId, itemId, all) {
+  const { data } = await db.from('inventory').select('qty').eq('player_id', playerId).eq('item_id', itemId).maybeSingle();
+  if (!data) return false;
+  if (all || data.qty <= 1) await db.from('inventory').delete().eq('player_id', playerId).eq('item_id', itemId);
+  else await db.from('inventory').update({ qty: data.qty - 1 }).eq('player_id', playerId).eq('item_id', itemId);
+  return true;
+}
+const COL = { signText: 'sign_text', awningColor: 'awning_color', wallColor: 'wall_color', roofColor: 'roof_color', facadeItem: 'facade_item', greeting: 'greeting', interior: 'interior', interior2: 'interior2' };
+
+// Each handler: (db, params, me) → result. `me` is the authenticated player id.
+export const handlers = {
+  async ping(db, _p, me) { await db.from('players').update({ last_seen_at: new Date().toISOString() }).eq('id', me); return { ok: true }; },
+  async listPlayers(db) { const { data } = await db.from('players').select('*'); return (data || []).map(mapPlayer); },
+  async getPlayer(db, { id }) { const { data } = await db.from('players').select('*').eq('id', id).maybeSingle(); return data ? mapPlayer(data) : null; },
+  async completeSetup(db, { avatar, shopType }, me) { const patch = { setup_complete: true }; if (avatar) patch.avatar = avatar; if (shopType) patch.shop_type = shopType; await db.from('players').update(patch).eq('id', me); return handlers.getPlayer(db, { id: me }); },
+  async saveAvatar(db, { avatar }, me) { await db.from('players').update({ avatar }).eq('id', me); return handlers.getPlayer(db, { id: me }); },
+
+  async getShop(db, { ownerId }) { const { data } = await db.from('shops').select('*').eq('owner_id', ownerId).maybeSingle(); return mapShop(data); },
+  async listShops(db) { const { data } = await db.from('shops').select('*'); return (data || []).map(mapShop); },
+  async saveShop(db, { ownerId, patch }, me) {
+    if (ownerId !== me) return { error: 'forbidden' };
+    const col = { updated_at: new Date().toISOString() };
+    for (const k in patch) if (COL[k]) col[COL[k]] = patch[k];
+    await db.from('shops').update(col).eq('owner_id', ownerId);
+    return handlers.getShop(db, { ownerId });
+  },
+
+  async getInventory(db, { ownerId }) { const { data } = await db.from('inventory').select('item_id,qty').eq('player_id', ownerId); return (data || []).map((r) => ({ itemId: r.item_id, qty: r.qty })); },
+  async addInventoryItem(db, { ownerId, itemId, qty = 1 }, me) { if (ownerId !== me) return { error: 'forbidden' }; await invAdd(db, ownerId, itemId, qty); return handlers.getInventory(db, { ownerId }); },
+  async removeInventoryItem(db, { ownerId, itemId, all = true }, me) { if (ownerId !== me) return { error: 'forbidden' }; await invRemove(db, ownerId, itemId, all); return handlers.getInventory(db, { ownerId }); },
+
+  async getCreations(db) { const { data } = await db.from('creations').select('*'); return (data || []).map((c) => ({ id: c.id, name: c.name, sprite: c.sprite, by: c.by_player })); },
+  async addCreation(db, { name, sprite }, me) { const id = nid('cr'); await db.from('creations').insert({ id, name: String(name || 'Creation').slice(0, 24), sprite, by_player: me }); await invAdd(db, me, `creation:${id}`, 1); return { id }; },
+
+  async sendMessage(db, { toId, body }, me) { await db.from('messages').insert({ id: nid('m'), from_player: me, to_player: toId, body: String(body).slice(0, 100), read: false, created_at: new Date().toISOString() }); return { ok: true }; },
+  async listInbox(db, _p, me) { const { data } = await db.from('messages').select('*').eq('to_player', me).order('created_at', { ascending: false }); return (data || []).map((m) => ({ id: m.id, from: m.from_player, to: m.to_player, body: m.body, read: m.read, createdAt: new Date(m.created_at).getTime() })); },
+  async markInboxRead(db, _p, me) { await db.from('messages').update({ read: true }).eq('to_player', me).eq('read', false); return { ok: true }; },
+  async markThreadRead(db, { withId }, me) { await db.from('messages').update({ read: true }).eq('to_player', me).eq('from_player', withId).eq('read', false); return { ok: true }; },
+  async listThreads(db, _p, me) {
+    const { data } = await db.from('messages').select('*').or(`from_player.eq.${me},to_player.eq.${me}`);
+    const map = new Map();
+    for (const m of (data || [])) {
+      const other = m.from_player === me ? m.to_player : m.from_player;
+      if (!map.has(other)) map.set(other, []);
+      map.get(other).push({ id: m.id, from: m.from_player, to: m.to_player, body: m.body, read: m.read, createdAt: new Date(m.created_at).getTime(), mine: m.from_player === me });
+    }
+    const threads = [];
+    for (const [withId, msgs] of map) {
+      msgs.sort((a, b) => a.createdAt - b.createdAt);
+      threads.push({ withId, messages: msgs, unread: msgs.filter((x) => !x.mine && !x.read).length, lastAt: msgs[msgs.length - 1].createdAt });
+    }
+    return threads.sort((a, b) => b.lastAt - a.lastAt);
+  },
+
+  async proposeTrade(db, { toId, offeredItemId, requestedItemId }, me) {
+    const fi = await db.from('inventory').select('qty').eq('player_id', me).eq('item_id', offeredItemId).maybeSingle();
+    if (!fi.data || fi.data.qty < 1) return { ok: false, error: "You don't have that item." };
+    const ti = await db.from('inventory').select('qty').eq('player_id', toId).eq('item_id', requestedItemId).maybeSingle();
+    if (!ti.data || ti.data.qty < 1) return { ok: false, error: "They don't have that item." };
+    await db.from('trades').insert({ id: nid('t'), from_player: me, to_player: toId, offered_item_id: offeredItemId, requested_item_id: requestedItemId, status: 'pending', created_at: new Date().toISOString() });
+    return { ok: true };
+  },
+  async listTrades(db, _p, me) {
+    const { data } = await db.from('trades').select('*').or(`from_player.eq.${me},to_player.eq.${me}`);
+    const all = (data || []).map((t) => ({ id: t.id, from: t.from_player, to: t.to_player, offeredItemId: t.offered_item_id, requestedItemId: t.requested_item_id, status: t.status, createdAt: new Date(t.created_at).getTime() }));
+    const byNew = (a, b) => b.createdAt - a.createdAt;
+    return {
+      incoming: all.filter((t) => t.to === me && t.status === 'pending').sort(byNew),
+      outgoing: all.filter((t) => t.from === me && t.status === 'pending').sort(byNew),
+      history: all.filter((t) => t.status !== 'pending').sort(byNew),
+    };
+  },
+  async respondTrade(db, { tradeId, accept }, me) {
+    const { data: t } = await db.from('trades').select('*').eq('id', tradeId).maybeSingle();
+    if (!t || t.to_player !== me || t.status !== 'pending') return { ok: false, error: 'Trade not found.' };
+    if (!accept) { await db.from('trades').update({ status: 'declined' }).eq('id', tradeId); return { ok: true }; }
+    if (!await invRemove(db, t.from_player, t.offered_item_id, false)) { await db.from('trades').update({ status: 'declined' }).eq('id', tradeId); return { ok: false, error: 'The offer is no longer available.' }; }
+    if (!await invRemove(db, t.to_player, t.requested_item_id, false)) { await invAdd(db, t.from_player, t.offered_item_id, 1); await db.from('trades').update({ status: 'declined' }).eq('id', tradeId); return { ok: false, error: 'You no longer have that item.' }; }
+    await invAdd(db, t.to_player, t.offered_item_id, 1);
+    await invAdd(db, t.from_player, t.requested_item_id, 1);
+    await db.from('trades').update({ status: 'accepted' }).eq('id', tradeId);
+    return { ok: true };
+  },
+  async giftItem(db, { toId, itemId }, me) {
+    if (!await invRemove(db, me, itemId, false)) return { ok: false, error: "You don't have that item." };
+    await invAdd(db, toId, itemId, 1);
+    let name = itemId;
+    if (typeof itemId === 'string' && itemId.startsWith('creation:')) { const c = await db.from('creations').select('name').eq('id', itemId.slice(9)).maybeSingle(); name = c.data?.name || 'a gift'; }
+    await db.from('messages').insert({ id: nid('m'), from_player: me, to_player: toId, body: `🎁 I sent you ${name}!`, read: false, created_at: new Date().toISOString() });
+    return { ok: true };
+  },
+  async getCounts(db, _p, me) {
+    const { count: unread } = await db.from('messages').select('*', { count: 'exact', head: true }).eq('to_player', me).eq('read', false);
+    const { count: pendingTrades } = await db.from('trades').select('*', { count: 'exact', head: true }).eq('to_player', me).eq('status', 'pending');
+    return { unread: unread || 0, pendingTrades: pendingTrades || 0 };
+  },
+};
