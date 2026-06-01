@@ -243,13 +243,20 @@ export default function ShopRoom({
       else return;
       e.preventDefault();
     };
+    // Ignore game keys while typing (note box, trade selects, etc.) — otherwise
+    // Space would close the panel and arrows would walk the avatar behind it.
+    const typing = (e) => {
+      const t = (e.target.tagName || '').toLowerCase();
+      return t === 'input' || t === 'textarea' || t === 'select' || e.target.isContentEditable;
+    };
     const onDown = (e) => {
+      if (typing(e)) return;
       const k = e.key.toLowerCase();
       if (['arrowleft', 'arrowright', 'arrowup', 'arrowdown', 'a', 'd', 'w', 's'].includes(k)) { setAxis(e, true); return; }
       if (k === ' ' || k === 'enter') { e.preventDefault(); if (panel) setPanel(null); else act(); }
       else if (k === 'escape') { e.preventDefault(); if (panel) setPanel(null); else if (floor === 'upstairs') goFloor('shop'); else onLeave?.(); }
     };
-    const onUp = (e) => setAxis(e, false);
+    const onUp = (e) => { if (!typing(e)) setAxis(e, false); };
     window.addEventListener('keydown', onDown);
     window.addEventListener('keyup', onUp);
     return () => { window.removeEventListener('keydown', onDown); window.removeEventListener('keyup', onUp); };
