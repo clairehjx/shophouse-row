@@ -28,15 +28,19 @@ export default function App() {
 
   const refresh = () => setRefreshKey((k) => k + 1);
 
-  // Keep the global creation-sprite registry in sync (so creation:<id> renders everywhere).
+  // Keep the global creation-sprite registry in sync (so creation:<id> renders
+  // everywhere). Best-effort: never let it block/break boot (cloud getCreations
+  // needs a login token, which doesn't exist before you log in).
   async function syncCreations() {
-    const all = await api.getCreations();
-    setCreationsRegistry(Object.fromEntries(all.map((c) => [c.id, c])));
+    try {
+      const all = await api.getCreations();
+      setCreationsRegistry(Object.fromEntries(all.map((c) => [c.id, c])));
+    } catch { /* not logged in yet / offline — ignore */ }
   }
 
   useEffect(() => {
     (async () => {
-      await api.ensureSeeded();
+      try { await api.ensureSeeded(); } catch { /* ignore */ }
       await syncCreations();
       routeFor(api.getSession());
     })();

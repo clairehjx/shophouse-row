@@ -8,3 +8,4 @@ dist
 
 # Local-only dev notes (placeholder secret codes etc.) — never commit
 DEV-NOTES.md
+.vercel
