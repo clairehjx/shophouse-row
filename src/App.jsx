@@ -8,6 +8,7 @@ import VisitShop from './screens/VisitShop.jsx';
 import Inbox from './screens/Inbox.jsx';
 import Trades from './screens/Trades.jsx';
 import Bag from './screens/Bag.jsx';
+import News from './screens/News.jsx';
 import TopBar from './components/TopBar.jsx';
 import DevSwitcher from './components/DevSwitcher.jsx';
 import InstallPrompt from './components/InstallPrompt.jsx';
@@ -15,7 +16,7 @@ import { music } from './audio/soundtrack.js';
 import { setCreationsRegistry } from './pixel/items.js';
 
 // Screens with the header/nav shell.
-const SHELL = ['street', 'myshop', 'visit', 'inbox', 'trades', 'bag'];
+const SHELL = ['street', 'myshop', 'visit', 'inbox', 'trades', 'bag', 'news'];
 
 export default function App() {
   const [screen, setScreen] = useState('loading');
@@ -166,6 +167,10 @@ export default function App() {
 
         {screen === 'bag' && player && (
           <Bag player={player} onBack={backFromNav} backLabel={navBackLabel} toast={note} onChanged={refresh} />
+        )}
+
+        {screen === 'news' && player && (
+          <News player={player} onBack={backFromNav} backLabel={navBackLabel} toast={note} onChanged={refresh} />
         )}
         </div>
       </main>

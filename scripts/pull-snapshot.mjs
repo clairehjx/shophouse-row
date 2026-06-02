@@ -29,12 +29,17 @@ const all = async (table) => {
 const [players, shops, inventory, creations, messages, trades] = await Promise.all(
   ['players', 'shops', 'inventory', 'creations', 'messages', 'trades'].map(all),
 );
+// Tolerant: the announcements table may not exist until the News-tab migration is run.
+const annRes = await db.from('announcements').select('*');
+const announcements = (annRes.data || []).map((a) => ({ id: a.id, body: a.body, by: a.by_player, createdAt: ms(a.created_at) }));
+if (annRes.error) console.log('  (announcements table not found yet — skipping; run schema.sql to enable News)');
 
 const snap = {
   pulledAt: Date.now(),
   players: Object.fromEntries(players.map((p) => [p.id, {
     id: p.id, name: p.name, shopType: p.shop_type, isAdmin: !!p.is_admin,
     setupComplete: !!p.setup_complete, avatar: p.avatar || null, lastSeenAt: ms(p.last_seen_at),
+    newsSeenAt: ms(p.news_seen_at),
   }])),
   shops: Object.fromEntries(shops.map((s) => [s.owner_id, {
     ownerId: s.owner_id, signText: s.sign_text, awningColor: s.awning_color, wallColor: s.wall_color,
@@ -48,10 +53,11 @@ const snap = {
   creations: Object.fromEntries(creations.map((c) => [c.id, { id: c.id, name: c.name, sprite: c.sprite, by: c.by_player }])),
   messages: messages.map((m) => ({ id: m.id, from: m.from_player, to: m.to_player, body: m.body, read: !!m.read, createdAt: ms(m.created_at) })),
   trades: trades.map((t) => ({ id: t.id, from: t.from_player, to: t.to_player, offeredItemId: t.offered_item_id, requestedItemId: t.requested_item_id, status: t.status, createdAt: ms(t.created_at) })),
+  announcements,
 };
 
 const dest = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'data', 'snapshot.local.json');
 writeFileSync(dest, JSON.stringify(snap, null, 2));
 console.log(`Wrote ${dest}`);
-console.log(`  players ${players.length} · shops ${shops.length} · inventory ${inventory.length} · creations ${creations.length} · messages ${messages.length} · trades ${trades.length}`);
+console.log(`  players ${players.length} · shops ${shops.length} · inventory ${inventory.length} · creations ${creations.length} · messages ${messages.length} · trades ${trades.length} · announcements ${announcements.length}`);
 console.log('Now run:  npm run dev   (local code, real data). Delete the file to return to the demo seed.');

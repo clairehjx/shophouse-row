@@ -52,6 +52,11 @@ async function invRemove(db, playerId, itemId, all) {
 }
 const COL = { signText: 'sign_text', awningColor: 'awning_color', wallColor: 'wall_color', roofColor: 'roof_color', facadeItem: 'facade_item', greeting: 'greeting', interior: 'interior', interior2: 'interior2' };
 
+async function isAdmin(db, me) {
+  const { data } = await db.from('players').select('is_admin').eq('id', me).maybeSingle();
+  return !!data?.is_admin;
+}
+
 // Each handler: (db, params, me) → result. `me` is the authenticated player id.
 export const handlers = {
   async ping(db, _p, me) { await db.from('players').update({ last_seen_at: new Date().toISOString() }).eq('id', me); return { ok: true }; },
@@ -137,6 +142,33 @@ export const handlers = {
   async getCounts(db, _p, me) {
     const { count: unread } = await db.from('messages').select('*', { count: 'exact', head: true }).eq('to_player', me).eq('read', false);
     const { count: pendingTrades } = await db.from('trades').select('*', { count: 'exact', head: true }).eq('to_player', me).eq('status', 'pending');
-    return { unread: unread || 0, pendingTrades: pendingTrades || 0 };
+    // News count is fully isolated: it can never affect the Notes/Trades badges,
+    // even if the announcements table/column isn't migrated yet.
+    let news = 0;
+    try {
+      const { data: meRow } = await db.from('players').select('news_seen_at').eq('id', me).maybeSingle();
+      const since = meRow?.news_seen_at || '1970-01-01T00:00:00Z';
+      const { count } = await db.from('announcements').select('*', { count: 'exact', head: true }).gt('created_at', since);
+      news = count || 0;
+    } catch { news = 0; }
+    return { unread: unread || 0, pendingTrades: pendingTrades || 0, news };
+  },
+
+  // Admin broadcast announcements (News tab).
+  async listAnnouncements(db) {
+    const { data } = await db.from('announcements').select('*').order('created_at', { ascending: false });
+    return (data || []).map((a) => ({ id: a.id, body: a.body, by: a.by_player, createdAt: new Date(a.created_at).getTime() }));
+  },
+  async postAnnouncement(db, { body }, me) {
+    if (!await isAdmin(db, me)) return { ok: false, error: 'Only the admin can post announcements.' };
+    const text = String(body || '').trim().slice(0, 280);
+    if (!text) return { ok: false, error: 'Write something first.' };
+    const { error } = await db.from('announcements').insert({ id: nid('a'), body: text, by_player: me, created_at: new Date().toISOString() });
+    if (error) return { ok: false, error: 'News isn’t set up on the server yet.' };
+    return { ok: true };
+  },
+  async markNewsRead(db, _p, me) {
+    await db.from('players').update({ news_seen_at: new Date().toISOString() }).eq('id', me);
+    return { ok: true };
   },
 };

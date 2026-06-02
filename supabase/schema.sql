@@ -71,9 +71,21 @@ create table if not exists messages (
   created_at  timestamptz not null default now()
 );
 
+-- Admin broadcast announcements: Claire H. posts → everyone sees them in the News tab.
+create table if not exists announcements (
+  id          text primary key,
+  body        text not null,
+  by_player   text references players(id) on delete set null,
+  created_at  timestamptz not null default now()
+);
+
+-- Per-player "last time I opened the News tab" — anything newer counts as unread.
+alter table players add column if not exists news_seen_at timestamptz;
+
 create index if not exists idx_inventory_player on inventory(player_id);
 create index if not exists idx_trades_to on trades(to_player, status);
 create index if not exists idx_messages_to on messages(to_player, read);
+create index if not exists idx_announcements_created on announcements(created_at desc);
 
 -- Row Level Security: all writes go through Vercel serverless functions using the
 -- service-role key (which bypasses RLS). Enable RLS and add NO public policies so the
@@ -85,6 +97,7 @@ alter table inventory     enable row level security;
 alter table creations     enable row level security;
 alter table trades        enable row level security;
 alter table messages      enable row level security;
+alter table announcements enable row level security;
 
 -- The serverless functions use the service_role key (bypasses RLS). On new projects
 -- with the new API keys, that role may lack table grants, so grant them explicitly.

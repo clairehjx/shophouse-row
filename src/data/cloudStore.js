@@ -78,6 +78,11 @@ export async function listTrades() { return rpc('listTrades'); }
 export async function respondTrade(tradeId, accept) { return rpc('respondTrade', { tradeId, accept }); }
 export async function giftItem(fromId, toId, itemId) { return rpc('giftItem', { toId, itemId }); }
 
+// ---- announcements (admin broadcast → News tab) ----
+export async function listAnnouncements() { return rpc('listAnnouncements'); }
+export async function postAnnouncement(playerId, body) { return rpc('postAnnouncement', { body }); }
+export async function markNewsRead() { return rpc('markNewsRead'); }
+
 // ---- misc ----
 export async function getCounts() { return rpc('getCounts'); }
 export function devSwitch() { throw new Error('devSwitch is local-only'); }

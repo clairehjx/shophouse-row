@@ -103,6 +103,7 @@ function load() {
   // Migrate older saved states so newer fields never read as undefined.
   if (state) {
     if (!state.creations) state.creations = {};
+    if (!state.announcements) state.announcements = [];
     if (state.shops) for (const s of Object.values(state.shops)) { if (!s.interior) s.interior = []; if (!s.interior2) s.interior2 = []; }
   }
   return state;
@@ -131,6 +132,7 @@ export async function ensureSeeded() {
       setupComplete: !!demo,
       avatar: demo ? (demo.avatar || randomAvatar(demo.seed)) : null,
       lastSeenAt: demo ? Date.now() : 0, // demo neighbours start "online"
+      newsSeenAt: 0, // last time they opened the News tab
     };
     codes[r.id] = await hashCode(r.id); // default code = the id, e.g. "chloe"
     shops[r.id] = type
@@ -148,7 +150,7 @@ export async function ensureSeeded() {
       : { ownerId: r.id, ...VACANT, facadeItem: null, greeting: '', interior: [], interior2: [] };
     inventory[r.id] = demo ? startingInventory(demo.shopType) : [];
   }
-  state = { players, codes, shops, inventory, creations: {}, messages: [], trades: [], session: null, seq: 1 };
+  state = { players, codes, shops, inventory, creations: {}, messages: [], trades: [], announcements: [], session: null, seq: 1 };
   // Sample conversations + a trade so the social loop is testable the moment you log in.
   const t0 = Date.now();
   state.messages.push(
@@ -158,6 +160,7 @@ export async function ensureSeeded() {
     { id: nextId('m'), from: 'grace', to: 'claireh', body: 'Fresh bread for a book sometime? 🥖📖', read: false, createdAt: t0 - 1800_000 },
   );
   state.trades.push({ id: nextId('t'), from: 'grace', to: 'claireh', offeredItemId: 'bread:Sourdough', requestedItemId: 'book:Matilda', status: 'pending', createdAt: t0 - 1800_000 });
+  state.announcements.push({ id: nextId('a'), body: 'Welcome to Shophouse Row! 🎉 Decorate your shop and say hi to your neighbours.', by: 'claireh', createdAt: t0 - 5400_000 });
   save();
 }
 
@@ -176,6 +179,7 @@ async function seedFromSnapshot() {
     creations: clone.creations || {},
     messages: clone.messages || [],
     trades: clone.trades || [],
+    announcements: clone.announcements || [],
     session: null,
     seq: 100000, // well above any local "m1/t1/cr1" ids to avoid collisions
   };
@@ -501,8 +505,34 @@ export async function giftItem(fromId, toId, itemId) {
 // Notification counts for the header badges.
 export async function getCounts(playerId) {
   await ensureSeeded();
+  const seen = state.players[playerId]?.newsSeenAt || 0;
   return {
     unread: state.messages.filter((m) => m.to === playerId && !m.read).length,
     pendingTrades: state.trades.filter((t) => t.to === playerId && t.status === 'pending').length,
+    news: state.announcements.filter((a) => a.createdAt > seen).length,
   };
+}
+
+// ---- Announcements (admin broadcast → everyone's News tab) -----------------
+
+export async function listAnnouncements() {
+  await ensureSeeded();
+  return [...state.announcements].sort((a, b) => b.createdAt - a.createdAt).map((a) => ({ ...a }));
+}
+
+export async function postAnnouncement(playerId, body) {
+  await ensureSeeded();
+  if (!state.players[playerId]?.isAdmin) return { ok: false, error: 'Only the admin can post announcements.' };
+  const text = String(body || '').trim().slice(0, 280);
+  if (!text) return { ok: false, error: 'Write something first.' };
+  const a = { id: nextId('a'), body: text, by: playerId, createdAt: Date.now() };
+  state.announcements.push(a);
+  save();
+  return { ok: true, announcement: { ...a } };
+}
+
+export async function markNewsRead(playerId) {
+  await ensureSeeded();
+  const p = state.players[playerId];
+  if (p) { p.newsSeenAt = Date.now(); save(); }
 }

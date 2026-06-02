@@ -23,7 +23,7 @@ function NavBtn({ active, onClick, label, badge }) {
 // Header on the main screens: who you are + nav with note/trade badges.
 export default function TopBar({ player, screen, onNav, onEditAvatar, onLogout, refreshKey }) {
   const type = SHOP_TYPE_MAP[player.shopType];
-  const [counts, setCounts] = useState({ unread: 0, pendingTrades: 0 });
+  const [counts, setCounts] = useState({ unread: 0, pendingTrades: 0, news: 0 });
   const [musicOn, setMusicOn] = useState(music.enabled);
 
   useEffect(() => {
@@ -43,6 +43,7 @@ export default function TopBar({ player, screen, onNav, onEditAvatar, onLogout, 
       <NavBtn active={screen === 'bag'} onClick={() => onNav('bag')} label="🎒 Bag" />
       <NavBtn active={screen === 'inbox'} onClick={() => onNav('inbox')} label="💌 Notes" badge={counts.unread} />
       <NavBtn active={screen === 'trades'} onClick={() => onNav('trades')} label="🔄 Trades" badge={counts.pendingTrades} />
+      <NavBtn active={screen === 'news'} onClick={() => onNav('news')} label="📣 News" badge={counts.news} />
       <button onClick={() => setMusicOn(music.toggle())} title="Music" className="cozy-btn-ghost !px-3 !py-2 text-xs">
         {musicOn ? '🔊' : '🔈'}
       </button>

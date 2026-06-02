@@ -50,6 +50,11 @@ export const api = {
   respondTrade: store.respondTrade,
   giftItem: store.giftItem,
 
+  // announcements (admin broadcast → News tab)
+  listAnnouncements: store.listAnnouncements,
+  postAnnouncement: store.postAnnouncement,
+  markNewsRead: store.markNewsRead,
+
   // notifications
   getCounts: store.getCounts,
 
