@@ -12,3 +12,7 @@ DEV-NOTES.md
 
 # Invitation cards contain per-friend secret codes — never commit (repo is public)
 invites/
+
+# Local DB snapshot (real player data) pulled by scripts/pull-snapshot.mjs — never commit
+src/data/snapshot.local.json
+*.local.json

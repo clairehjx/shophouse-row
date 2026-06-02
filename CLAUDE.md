@@ -56,6 +56,12 @@ Each shop has a unique creatable shelf (books/vinyls/candies/cars/…). Tea hous
 - Codes: **bcrypt**, default = player id. Change: `scripts/set-code.mjs <id> <code>`.
 - Admin tasks via service-role scripts (no in-game admin UI).
 - Realtime = 60s `last_seen_at` heartbeat for presence (true Supabase Realtime = TODO).
+- **Test changes against real data BEFORE deploying** (avoids PWA-cache surprises):
+  `node --env-file=.env.local scripts/pull-snapshot.mjs` writes
+  `src/data/snapshot.local.json` (git-ignored, real data in localStore shapes); then
+  `npm run dev` seeds from it instead of the demo. Storage key is `snap-<pulledAt>`, so a
+  re-pull auto-reseeds. Delete the file to return to the synthetic demo seed. Prod is
+  unaffected (uses cloudStore; the file is absent there).
 
 ## Safety / never commit
 - `.env.local` (secrets) and `invites/` (per-friend codes) are git-ignored. Repo is public.

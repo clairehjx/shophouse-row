@@ -7,7 +7,19 @@ import { SHOP_TYPES } from '../pixel/shophouse.js';
 import { startingInventory, resolveItem } from '../pixel/items.js';
 import { randomAvatar } from '../pixel/avatar.js';
 
-const STORAGE_KEY = 'shophouse-row/v17';
+// Optional snapshot of the live database, written by `scripts/pull-snapshot.mjs`.
+// When present, `npm run dev` seeds from real data instead of the synthetic demo.
+// import.meta.glob returns {} when the file is absent (no error); the try/catch keeps
+// this importable in plain Node (smoke tests) where import.meta.glob doesn't exist.
+let SNAPSHOT = null;
+try {
+  const mods = import.meta.glob('./snapshot.local.json', { eager: true, import: 'default' });
+  SNAPSHOT = Object.values(mods)[0] || null;
+} catch { SNAPSHOT = null; }
+
+// Storage key is versioned; a fresh snapshot (new pulledAt) gets its own key so
+// re-pulling auto-reseeds local state without manually clearing localStorage.
+const STORAGE_KEY = SNAPSHOT ? `shophouse-row/snap-${SNAPSHOT.pulledAt}` : 'shophouse-row/v17';
 
 // --- inventory helpers (mutate an inventory array in place) ---
 function addToInv(inv, itemId, n = 1) {
@@ -103,6 +115,7 @@ function save() {
 // Seed the store on first run. Idempotent. Hashes the default dev codes.
 export async function ensureSeeded() {
   if (load()) return;
+  if (SNAPSHOT) { await seedFromSnapshot(); return; }
   const players = {};
   const codes = {};
   const shops = {};
@@ -145,6 +158,30 @@ export async function ensureSeeded() {
     { id: nextId('m'), from: 'grace', to: 'claireh', body: 'Fresh bread for a book sometime? 🥖📖', read: false, createdAt: t0 - 1800_000 },
   );
   state.trades.push({ id: nextId('t'), from: 'grace', to: 'claireh', offeredItemId: 'bread:Sourdough', requestedItemId: 'book:Matilda', status: 'pending', createdAt: t0 - 1800_000 });
+  save();
+}
+
+// Build local state from a pulled live-database snapshot. JSON-clone so edits in dev
+// don't mutate the imported module. Codes default to each player id (the dev "Play as"
+// switcher needs none); real bcrypt codes are never pulled.
+async function seedFromSnapshot() {
+  const clone = JSON.parse(JSON.stringify(SNAPSHOT));
+  const codes = {};
+  for (const id of Object.keys(clone.players)) codes[id] = await hashCode(id);
+  state = {
+    players: clone.players,
+    codes,
+    shops: clone.shops,
+    inventory: clone.inventory || {},
+    creations: clone.creations || {},
+    messages: clone.messages || [],
+    trades: clone.trades || [],
+    session: null,
+    seq: 100000, // well above any local "m1/t1/cr1" ids to avoid collisions
+  };
+  // Make sure every player has an inventory array and every shop has both floors.
+  for (const id of Object.keys(state.players)) if (!state.inventory[id]) state.inventory[id] = [];
+  for (const s of Object.values(state.shops)) { if (!s.interior) s.interior = []; if (!s.interior2) s.interior2 = []; }
   save();
 }
 
