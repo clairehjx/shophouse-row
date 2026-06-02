@@ -231,6 +231,16 @@ const car = [
   '..kk....kk..',
   '..kk....kk..',
 ];
+const soda = [
+  '....b.......',
+  '....b.......',
+  '.kkkkkk.....',
+  '.krwrrk.....',
+  '.krrwrk.....',
+  '.krrrwk.....',
+  '.kwrrrk.....',
+  '.kkkkkk.....',
+];
 
 // Sprite for any titled book (item id "book:<title>"). Exported for resolveItem.
 export const BOOK_SPRITE = book;
@@ -254,6 +264,7 @@ export const SHELF = {
   globe:   { shopType: 'snowglobe', sprite: SHOP_ICONS.snowglobe,label: 'Snowglobe shelf',noun: 'snowglobe',placeholder: 'Add a snowglobe…',           main: 'B' },
   toy:     { shopType: 'toy',       sprite: toybox,              label: 'Toy box shelf',  noun: 'toy box',  placeholder: 'Add a toy…',                 main: 'y' },
   car:     { shopType: 'car',       sprite: car,                 label: 'Car shelf',      noun: 'car',      placeholder: 'Add a car…',                 main: 'r' },
+  soda:    { shopType: 'soda',      sprite: soda,                label: 'Soda shelf',     noun: 'soda',     placeholder: 'Add a soda flavour…',        main: 'r', eat: 'Sipped' },
 };
 
 // Colour choices offered when making a new unique item.
@@ -381,6 +392,7 @@ export const STARTING_INVENTORY = {
   snowglobe: seedNames('globe', ['Winter Village', 'Snowy Forest', 'Ballerina', 'Castle']),
   toy: seedNames('toy', ['Robot', 'Doll', 'Toy Car', 'Building Blocks']),
   car: seedNames('car', ['Red Racer', 'Police Car', 'Fire Truck', 'Monster Truck']),
+  soda: seedNames('soda', ['Cola', 'Orange Fizz', 'Lemon-Lime', 'Grape Soda']),
 };
 
 export function startingInventory(shopType) {

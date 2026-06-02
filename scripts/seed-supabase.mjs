@@ -19,6 +19,7 @@ const ROSTER = [
   ['claireh', 'Claire H.', 'bookshop'], ['chloe', 'Chloe', 'craft'], ['clairey', 'Claire Y.', 'grocer'],
   ['vera', 'Vera', 'florist'], ['keira', 'Keira', 'snowglobe'], ['laura', 'Laura', 'sweet'],
   ['sharmaine', 'Sharmaine', 'garden'], ['caleb', 'Caleb', 'car'],
+  ['cayden', 'Cayden', 'soda'],
 ];
 
 // Keep only the scheme+host (drops trailing slash, /rest/v1, or any path).

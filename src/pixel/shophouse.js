@@ -19,6 +19,7 @@ export const SHOP_TYPES = [
   { key: 'snowglobe', name: 'Snowglobe Shop',emoji: '🔮', sells: 'Snowglobes & collectibles',awning: '#9fd6e8', wall: '#e6f4fa', roof: '#4f93b0' },
   { key: 'toy',       name: 'Toy Shop',      emoji: '🧸', sells: 'Toys & games',            awning: '#f6a8b0', wall: '#fdeef0', roof: '#cf6f7f' },
   { key: 'car',       name: 'Car Shop',      emoji: '🚗', sells: 'Toy cars & racers',       awning: '#e2604f', wall: '#fdeae6', roof: '#b0503f' },
+  { key: 'soda',      name: 'Soda Shop',     emoji: '🥤', sells: 'Fizzy sodas & flavours',  awning: '#f4a96b', wall: '#fdeede', roof: '#c97b3f' },
 ];
 
 export const SHOP_TYPE_MAP = Object.fromEntries(SHOP_TYPES.map((s) => [s.key, s]));
@@ -26,7 +27,7 @@ export const SHOP_TYPE_MAP = Object.fromEntries(SHOP_TYPES.map((s) => [s.key, s]
 // Fixed left→right street order (Claire H. & Chloe centred among the 13). The Street
 // sorts players by this so positions are static in both local and cloud backends.
 export const STREET_ORDER = [
-  'jean', 'yiran', 'yifei', 'iris', 'grace', 'jeanette',
+  'cayden', 'jean', 'yiran', 'yifei', 'iris', 'grace', 'jeanette',
   'claireh', 'chloe',
   'clairey', 'vera', 'keira', 'laura', 'sharmaine', 'caleb',
 ];

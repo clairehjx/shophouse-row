@@ -7,7 +7,7 @@ import { SHOP_TYPES } from '../pixel/shophouse.js';
 import { startingInventory, resolveItem } from '../pixel/items.js';
 import { randomAvatar } from '../pixel/avatar.js';
 
-const STORAGE_KEY = 'shophouse-row/v16';
+const STORAGE_KEY = 'shophouse-row/v17';
 
 // --- inventory helpers (mutate an inventory array in place) ---
 function addToInv(inv, itemId, n = 1) {
@@ -53,6 +53,7 @@ const DEMO = {
   laura: { shopType: 'sweet', seed: 0.93 },
   sharmaine: { shopType: 'garden', seed: 0.99 },
   caleb: { shopType: 'car', seed: 0.37 },
+  cayden: { shopType: 'soda', seed: 0.43 },
 };
 
 // The fixed 12-player roster from the game plan. Claire H. is admin.
@@ -74,6 +75,7 @@ const ROSTER = [
   { id: 'laura', name: 'Laura' },
   { id: 'sharmaine', name: 'Sharmaine' },
   { id: 'caleb', name: 'Caleb' },
+  { id: 'cayden', name: 'Cayden' },
 ];
 
 let state = null;
