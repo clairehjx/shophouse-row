@@ -1,6 +1,9 @@
-# Shophouse Row — Lightweight Session Logging (Online + Active)
+# Shophouse Row — Session Logging + Reversible Player Actions
 
 > Saved plan, to be revisited later. Not yet implemented.
+> **Two parts:** (1) lightweight online+active session logging (admin-read);
+> (2) self-service fix-it tools — unsend a message, undo an accidental donate/destroy, retract a trade.
+> Part 1 is everything immediately below; **Part 2 is at the end of this file.**
 
 ## Context
 
@@ -145,3 +148,95 @@ for the cloud feature to work.
 - **Active resolution = heartbeat interval (~60 s):** active time is granular to the minute, which is
   plenty for this use.
 - Session table grows ~1 row per player per session — tiny; no pruning needed for a long time.
+
+---
+
+# Part 2 — Reversible player actions (self-service)
+
+> Added on request. A sibling "fix what happened" feature set (not session logging itself).
+> **Decisions:** **in-game self-service** (players fix their *own* mistakes). 2A/2C act on others, so
+> they're server handlers with **ownership** checks; **2B is your own bag** — a client-side undo, no
+> backend.
+
+Theme: a safe "undo my mistake" affordance. **2A (unsend) and 2C (retract)** affect another player, so
+each is a server handler that enforces **ownership** (`from_player === me`, the same pattern as the
+existing `saveShop`/`giftItem` `forbidden` checks in `_lib.js`) plus a **state check**, riding the
+existing `/api/rpc` dispatch (`api/rpc.js` → `handlers` in `_lib.js`), the `src/data/api.js` seam, with
+a `localStore.js` mirror. **2B (undo donate)** touches only your own inventory and needs none of that.
+
+## 2A. Unsend a sent message
+- **Handler** `deleteMessage(db, { messageId }, me)`: load the message; require `from_player === me`;
+  then `db.from('messages').delete().eq('id', messageId)` (hard delete — the inbox simply stops
+  showing it). Works whether or not the recipient already read it ("delete for everyone"). Optional
+  time window — default allow anytime. Also lets you remove the auto "🎁 I sent you…" gift notice.
+- **Client:** an **"Unsend"** affordance in the `Inbox` thread on messages where `mine === true`
+  (`listThreads` already flags `mine`) → `api.deleteMessage(id)` → refresh.
+- **localStore:** drop it from `state.messages`.
+
+## 2B. Undo an accidental donate / destroy (your own item)
+The Bag's 🎁 button calls `donate(itemId)` (`Bag.jsx:26-31`), which is really a **self-destroy**:
+`api.removeInventoryItem(me, itemId, false)` drops one from your bag with **no recipient and no
+confirmation**, so a single stray tap on a phone permanently loses an item. (Eating food via `consume`
+is the same one-tap removal, but intentional.) Goal: let a player undo an accidental donate.
+
+**Approach — a transient "Undo" toast (Gmail-style); no backend, no schema.** The item *definition*
+never goes away — only the inventory count drops — so undo is simply a **re-add of the same id**.
+- On donate, show a toast with an **"Undo"** action for ~6 s → `api.addInventoryItem(me, itemId, 1)` →
+  reload. Stash the last-destroyed `{itemId}` in `Bag` state so the button still works as the toast
+  fades; clear it after the window or on the next action.
+- Works for **every** id — plain, shelf goods `prefix:name(::hex)`, and `creation:<id>` (the creation
+  still resolves via the registry) — re-adding restores it exactly.
+- **No new handler, no new table** — reuses the existing `addInventoryItem` seam (which already has
+  localStore parity). The lightest of the three.
+- **Also included — two safety extras (prevent the mistake, undo is the backstop):**
+  - **Confirm before donate** — a quick "Give away {name}? It'll leave your bag." prompt so a stray tap
+    can't destroy an item silently. The Undo toast remains as the safety net if they confirm and still
+    regret it.
+  - **Relabel the button** — the 🎁 `title="Donate (give it away)"` has **no recipient**; change the
+    copy (and the toast) to "Remove from bag" / "Removed {name}" so it stops implying someone receives
+    it. (A real give-to-a-friend flow already exists via gifting — this button just discards.)
+  - (Eating could reuse the same Undo toast, but it's intentional → left out for now.)
+
+## 2C. Retract a pending trade
+Today only the recipient acts (`respondTrade` accept/decline); the proposer can't cancel. Pending
+trades hold **no escrowed items** (items move only on accept), so retract is a safe status flip.
+- **Handler** `retractTrade(db, { tradeId }, me)`: require trade exists, `from_player === me`,
+  `status === 'pending'`; set `status = 'retracted'`. No inventory change. (`retracted` is just a new
+  value in the existing free-text `status` — **no schema change**; it falls into `listTrades`
+  **history**.)
+- **Client:** a **"Retract"** button on each **outgoing pending** trade in the `Trades` screen →
+  `api.retractTrade(id)` → refresh.
+- **localStore:** same status flip.
+
+## Wiring
+- `api/_lib.js`: add `deleteMessage` and `retractTrade` handlers (2B needs **no** handler).
+- `src/data/api.js` + `src/data/cloudStore.js`: expose `deleteMessage`, `retractTrade` (cloud = `rpc`
+  passthrough; the dispatcher already routes by handler name).
+- `src/data/localStore.js`: local implementations of those two (2B reuses `addInventoryItem`, already
+  mirrored).
+- UI: `src/screens/Inbox.jsx` (unsend), `src/screens/Trades.jsx` (retract), `src/screens/Bag.jsx`
+  (undo-donate toast; optional confirm + relabel).
+- `supabase/schema.sql`: **no change** — `retracted` is just a new value in the free-text trade
+  `status`; 2B adds nothing.
+
+## Build order (step by step, ship only at end — same workflow)
+0. Pull the Supabase snapshot → `npm run dev` test bed.
+1. **2B — undo donate** (`Bag.jsx` only): confirm-before-donate + relabel button + Undo toast/state.
+   Client-only, ships any time — the quickest win.
+2. **2C — retract trade** (`retractTrade` handler + seam + Trades button). Simplest server action.
+3. **2A — unsend** (`deleteMessage` handler + seam + Inbox unsend).
+4. **SHIP:** deploy handlers + UI together. No schema change.
+
+## Verification (no browser)
+- Smoke test against the snapshot: propose→retract (status flips, **no** inventory move); send→unsend
+  (gone from the recipient's thread); donate→undo (the item returns to your bag, qty restored). Assert
+  **no negative inventory ever**.
+- `npm run build` per step; `npm run dev` against the snapshot.
+
+## Caveats
+- **Unsend is silent** (no "message deleted" tombstone) — fine for this group; add one later if it
+  feels confusing.
+- **Undo-donate is a transient window** (re-add within the toast) — if the player navigates away the
+  toast is gone; that's why **confirm-before-donate** is included, to prevent the mistake up front.
+- **2A/2C are self-service for your own actions only** — each handler checks `from_player === me`. A
+  force-undo admin override could be a later service-role script if ever needed.
