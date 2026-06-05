@@ -18,10 +18,18 @@ async function rpc(action, params) {
   return j.result;
 }
 
+// Track real interaction so each heartbeat can report online (always) vs active
+// (interacted within the last beat). Cheap global listeners, no React involvement.
+let lastActivityAt = 0;
+if (typeof window !== 'undefined') {
+  const mark = () => { lastActivityAt = Date.now(); };
+  ['pointerdown', 'keydown', 'touchstart'].forEach((e) => window.addEventListener(e, mark, { passive: true }));
+}
+
 let hb;
 function startHeartbeat() {
   if (hb || !token) return;
-  const ping = () => { if (token) rpc('ping').catch(() => {}); };
+  const ping = () => { if (token) rpc('ping', { active: Date.now() - lastActivityAt < 60000 }).catch(() => {}); };
   ping();
   hb = setInterval(ping, 60000);
 }

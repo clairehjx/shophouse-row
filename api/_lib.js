@@ -3,6 +3,7 @@
 // "_" are not treated as routes by Vercel.
 import { createClient } from '@supabase/supabase-js';
 import jwt from 'jsonwebtoken';
+import { planBeat } from '../src/data/sessionLogic.js';
 
 const ONLINE_WINDOW = 5 * 60 * 1000;
 
@@ -57,9 +58,40 @@ async function isAdmin(db, me) {
   return !!data?.is_admin;
 }
 
+// Log/extend a play session off the existing heartbeat (and on login). `prevSeen` is
+// the player's last_seen_at BEFORE this beat. Safe if the sessions table is missing
+// (Supabase returns errors, not throws) — it simply no-ops until the migration runs.
+export async function touchSession(db, playerId, prevSeen, active) {
+  const nowMs = Date.now();
+  const prevMs = prevSeen ? new Date(prevSeen).getTime() : 0;
+  const { data: s } = await db.from('sessions').select('id,last_ping_at,active_seconds')
+    .eq('player_id', playerId).order('last_ping_at', { ascending: false }).limit(1).maybeSingle();
+  const last = s ? { id: s.id, lastPingAt: new Date(s.last_ping_at).getTime(), activeSeconds: s.active_seconds } : null;
+  const plan = planBeat(last, prevMs, nowMs, active);
+  if (plan.kind === 'extend') {
+    const patch = { last_ping_at: new Date(plan.patch.lastPingAt).toISOString() };
+    if ('activeSeconds' in plan.patch) {
+      patch.active_seconds = plan.patch.activeSeconds;
+      patch.last_active_at = new Date(plan.patch.lastActiveAt).toISOString();
+    }
+    return db.from('sessions').update(patch).eq('id', plan.sessionId);
+  }
+  const r = plan.row;
+  return db.from('sessions').insert({
+    id: nid('s'), player_id: playerId,
+    started_at: new Date(r.startedAt).toISOString(), last_ping_at: new Date(r.lastPingAt).toISOString(),
+    last_active_at: r.lastActiveAt ? new Date(r.lastActiveAt).toISOString() : null, active_seconds: r.activeSeconds,
+  });
+}
+
 // Each handler: (db, params, me) → result. `me` is the authenticated player id.
 export const handlers = {
-  async ping(db, _p, me) { await db.from('players').update({ last_seen_at: new Date().toISOString() }).eq('id', me); return { ok: true }; },
+  async ping(db, { active } = {}, me) {
+    const { data: p } = await db.from('players').select('last_seen_at').eq('id', me).maybeSingle();
+    try { await touchSession(db, me, p?.last_seen_at, !!active); } catch { /* sessions table optional */ }
+    await db.from('players').update({ last_seen_at: new Date().toISOString() }).eq('id', me);
+    return { ok: true };
+  },
   async listPlayers(db) { const { data } = await db.from('players').select('*'); return (data || []).map(mapPlayer); },
   async getPlayer(db, { id }) { const { data } = await db.from('players').select('*').eq('id', id).maybeSingle(); return data ? mapPlayer(data) : null; },
   async completeSetup(db, { avatar, shopType }, me) { const patch = { setup_complete: true }; if (avatar) patch.avatar = avatar; if (shopType) patch.shop_type = shopType; await db.from('players').update(patch).eq('id', me); return handlers.getPlayer(db, { id: me }); },

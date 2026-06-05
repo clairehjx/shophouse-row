@@ -82,10 +82,23 @@ create table if not exists announcements (
 -- Per-player "last time I opened the News tab" — anything newer counts as unread.
 alter table players add column if not exists news_seen_at timestamptz;
 
+-- Lightweight play-session log (admin-read only). One row per session; a >10-min
+-- online gap starts a new one. Online time = last_ping_at − started_at;
+-- active time = active_seconds (only beats with real input accrue it).
+create table if not exists sessions (
+  id             text primary key,
+  player_id      text not null references players(id) on delete cascade,
+  started_at     timestamptz not null default now(),
+  last_ping_at   timestamptz not null default now(),
+  last_active_at timestamptz,
+  active_seconds integer not null default 0
+);
+
 create index if not exists idx_inventory_player on inventory(player_id);
 create index if not exists idx_trades_to on trades(to_player, status);
 create index if not exists idx_messages_to on messages(to_player, read);
 create index if not exists idx_announcements_created on announcements(created_at desc);
+create index if not exists idx_sessions_player on sessions(player_id, last_ping_at desc);
 
 -- Row Level Security: all writes go through Vercel serverless functions using the
 -- service-role key (which bypasses RLS). Enable RLS and add NO public policies so the
@@ -98,6 +111,7 @@ alter table creations     enable row level security;
 alter table trades        enable row level security;
 alter table messages      enable row level security;
 alter table announcements enable row level security;
+alter table sessions      enable row level security;
 
 -- The serverless functions use the service_role key (bypasses RLS). On new projects
 -- with the new API keys, that role may lack table grants, so grant them explicitly.

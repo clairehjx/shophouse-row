@@ -6,6 +6,7 @@ import { hashCode } from './hash.js';
 import { SHOP_TYPES } from '../pixel/shophouse.js';
 import { startingInventory, resolveItem } from '../pixel/items.js';
 import { randomAvatar } from '../pixel/avatar.js';
+import { planBeat } from './sessionLogic.js';
 
 // Optional snapshot of the live database, written by `scripts/pull-snapshot.mjs`.
 // When present, `npm run dev` seeds from real data instead of the synthetic demo.
@@ -104,6 +105,7 @@ function load() {
   if (state) {
     if (!state.creations) state.creations = {};
     if (!state.announcements) state.announcements = [];
+    if (!state.sessions) state.sessions = [];
     if (state.shops) for (const s of Object.values(state.shops)) { if (!s.interior) s.interior = []; if (!s.interior2) s.interior2 = []; }
   }
   return state;
@@ -150,7 +152,7 @@ export async function ensureSeeded() {
       : { ownerId: r.id, ...VACANT, facadeItem: null, greeting: '', interior: [], interior2: [] };
     inventory[r.id] = demo ? startingInventory(demo.shopType) : [];
   }
-  state = { players, codes, shops, inventory, creations: {}, messages: [], trades: [], announcements: [], session: null, seq: 1 };
+  state = { players, codes, shops, inventory, creations: {}, messages: [], trades: [], announcements: [], sessions: [], session: null, seq: 1 };
   // Sample conversations + a trade so the social loop is testable the moment you log in.
   const t0 = Date.now();
   state.messages.push(
@@ -180,6 +182,7 @@ async function seedFromSnapshot() {
     messages: clone.messages || [],
     trades: clone.trades || [],
     announcements: clone.announcements || [],
+    sessions: clone.sessions || [],
     session: null,
     seq: 100000, // well above any local "m1/t1/cr1" ids to avoid collisions
   };
@@ -209,7 +212,7 @@ export async function login(name, code) {
   if (!player) return { ok: false, error: 'name' };
   const hash = await hashCode(code);
   if (hash !== state.codes[player.id]) return { ok: false, error: 'code' };
-  player.lastSeenAt = Date.now();
+  await recordBeat(player.id, { active: true }); // login is an active beat; stamps lastSeenAt
   state.session = { playerId: player.id };
   save();
   return { ok: true, player: publicPlayer(player) };
@@ -367,7 +370,7 @@ export async function devSwitch(id) {
   await ensureSeeded();
   const p = state.players[id];
   if (!p) return null;
-  p.lastSeenAt = Date.now();
+  await recordBeat(id, { active: true }); // dev "Play as" counts as an active beat
   state.session = { playerId: id };
   save();
   return publicPlayer(p);
@@ -381,6 +384,31 @@ export function resetStore() {
 function nextId(prefix) {
   if (!state.seq) state.seq = 1;
   return `${prefix}${state.seq++}`;
+}
+
+// ---- Play sessions (local parity for the cloud heartbeat) -----------------
+// Local play has no 60s timer; instead login/devSwitch record an active beat. The
+// gap/active accounting is the SAME pure logic the server uses (sessionLogic.js),
+// so the smoke test exercises it with a controlled clock.
+export async function recordBeat(playerId, { active = false, at = Date.now() } = {}) {
+  await ensureSeeded();
+  const p = state.players[playerId];
+  if (!p) return;
+  const mine = state.sessions.filter((s) => s.playerId === playerId).sort((a, b) => b.lastPingAt - a.lastPingAt);
+  const plan = planBeat(mine[0] || null, p.lastSeenAt || 0, at, active);
+  if (plan.kind === 'extend') {
+    const s = mine[0];
+    s.lastPingAt = plan.patch.lastPingAt;
+    if ('activeSeconds' in plan.patch) { s.activeSeconds = plan.patch.activeSeconds; s.lastActiveAt = plan.patch.lastActiveAt; }
+  } else {
+    state.sessions.push({ id: nextId('s'), playerId, ...plan.row });
+  }
+  p.lastSeenAt = at;
+  save();
+}
+export async function listSessions(playerId) {
+  await ensureSeeded();
+  return state.sessions.filter((s) => !playerId || s.playerId === playerId).map((s) => ({ ...s }));
 }
 
 // ---- Messages (sticky notes, ≤100 chars, no open chat) --------------------
