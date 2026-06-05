@@ -34,6 +34,14 @@ export default function Trades({ player, onBack, backLabel = '← Street', toast
     onChanged?.();
   }
 
+  async function retract(tradeId) {
+    const res = await api.retractTrade(player.id, tradeId);
+    if (!res?.ok) toast?.(res?.error || 'Could not retract.');
+    else toast?.('Offer retracted.');
+    await load();
+    onChanged?.();
+  }
+
   const name = (id) => people[id]?.name || id;
 
   return (
@@ -85,6 +93,7 @@ export default function Trades({ player, onBack, backLabel = '← Street', toast
                   To <span className="pixel-text text-xs text-ink">{name(t.to)}</span>:
                   <ItemChip id={t.offeredItemId} /> for <ItemChip id={t.requestedItemId} />
                   <span className="text-[10px] text-sun">⏳ waiting</span>
+                  <button onClick={() => retract(t.id)} className="cozy-btn-ghost text-[10px] !px-2 !py-0.5">Retract</button>
                 </div>
               ))}
             </div>

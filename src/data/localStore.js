@@ -472,6 +472,16 @@ export async function markThreadRead(playerId, withId) {
   return changed;
 }
 
+// Unsend: only the sender can delete their own message.
+export async function deleteMessage(playerId, messageId) {
+  await ensureSeeded();
+  const m = state.messages.find((x) => x.id === messageId);
+  if (!m || m.from !== playerId) return { ok: false, error: 'forbidden' };
+  state.messages = state.messages.filter((x) => x.id !== messageId);
+  save();
+  return { ok: true };
+}
+
 // ---- Trades ---------------------------------------------------------------
 
 export async function proposeTrade(fromId, toId, offeredItemId, requestedItemId) {
@@ -484,6 +494,16 @@ export async function proposeTrade(fromId, toId, offeredItemId, requestedItemId)
   state.trades.push(trade);
   save();
   return { ok: true, trade: { ...trade } };
+}
+
+// Retract: only the proposer can cancel their own still-pending offer.
+export async function retractTrade(playerId, tradeId) {
+  await ensureSeeded();
+  const t = state.trades.find((x) => x.id === tradeId);
+  if (!t || t.from !== playerId || t.status !== 'pending') return { ok: false, error: 'Trade not found.' };
+  t.status = 'retracted';
+  save();
+  return { ok: true };
 }
 
 export async function listTrades(playerId) {

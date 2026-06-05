@@ -118,6 +118,13 @@ export const handlers = {
   async listInbox(db, _p, me) { const { data } = await db.from('messages').select('*').eq('to_player', me).order('created_at', { ascending: false }); return (data || []).map((m) => ({ id: m.id, from: m.from_player, to: m.to_player, body: m.body, read: m.read, createdAt: new Date(m.created_at).getTime() })); },
   async markInboxRead(db, _p, me) { await db.from('messages').update({ read: true }).eq('to_player', me).eq('read', false); return { ok: true }; },
   async markThreadRead(db, { withId }, me) { await db.from('messages').update({ read: true }).eq('to_player', me).eq('from_player', withId).eq('read', false); return { ok: true }; },
+  // Unsend: only the sender can delete their own message (hard delete for everyone).
+  async deleteMessage(db, { messageId }, me) {
+    const { data: m } = await db.from('messages').select('from_player').eq('id', messageId).maybeSingle();
+    if (!m || m.from_player !== me) return { ok: false, error: 'forbidden' };
+    await db.from('messages').delete().eq('id', messageId);
+    return { ok: true };
+  },
   async listThreads(db, _p, me) {
     const { data } = await db.from('messages').select('*').or(`from_player.eq.${me},to_player.eq.${me}`);
     const map = new Map();
@@ -151,6 +158,14 @@ export const handlers = {
       outgoing: all.filter((t) => t.from === me && t.status === 'pending').sort(byNew),
       history: all.filter((t) => t.status !== 'pending').sort(byNew),
     };
+  },
+  // Retract: only the proposer can cancel their own still-pending offer. No items are
+  // escrowed (they move on accept), so this is a safe status flip → lands in history.
+  async retractTrade(db, { tradeId }, me) {
+    const { data: t } = await db.from('trades').select('from_player,status').eq('id', tradeId).maybeSingle();
+    if (!t || t.from_player !== me || t.status !== 'pending') return { ok: false, error: 'Trade not found.' };
+    await db.from('trades').update({ status: 'retracted' }).eq('id', tradeId);
+    return { ok: true };
   },
   async respondTrade(db, { tradeId, accept }, me) {
     const { data: t } = await db.from('trades').select('*').eq('id', tradeId).maybeSingle();

@@ -43,11 +43,13 @@ export const api = {
   markInboxRead: store.markInboxRead,
   listThreads: store.listThreads,
   markThreadRead: store.markThreadRead,
+  deleteMessage: store.deleteMessage,
 
   // trades + gifts
   proposeTrade: store.proposeTrade,
   listTrades: store.listTrades,
   respondTrade: store.respondTrade,
+  retractTrade: store.retractTrade,
   giftItem: store.giftItem,
 
   // announcements (admin broadcast → News tab)

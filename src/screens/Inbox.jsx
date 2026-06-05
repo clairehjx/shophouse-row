@@ -38,6 +38,13 @@ export default function Inbox({ player, onBack, backLabel = '← Street', toast,
     setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }), 50);
   }
 
+  async function unsend(id) {
+    const r = await api.deleteMessage(player.id, id);
+    if (!r?.ok) { toast?.('Could not unsend that.'); return; }
+    await load();
+    onChanged?.();
+  }
+
   const current = threads.find((t) => t.withId === openWith);
   const friend = openWith ? people[openWith] : null;
 
@@ -104,7 +111,10 @@ export default function Inbox({ player, onBack, backLabel = '← Street', toast,
                 <div key={m.id} className={`flex ${m.mine ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[78%] rounded-2xl px-3 py-2 text-sm ${m.mine ? 'bg-peach text-paper' : 'bg-cream text-ink border-2 border-parch'}`}>
                     <p className="break-words">{m.body}</p>
-                    <div className={`text-[9px] mt-0.5 ${m.mine ? 'text-paper/80' : 'text-inksoft'}`}>{timeAgo(m.createdAt)}</div>
+                    <div className={`text-[9px] mt-0.5 flex items-center gap-2 ${m.mine ? 'text-paper/80 justify-end' : 'text-inksoft'}`}>
+                      <span>{timeAgo(m.createdAt)}</span>
+                      {m.mine && <button onClick={() => unsend(m.id)} className="underline hover:no-underline">Unsend</button>}
+                    </div>
                   </div>
                 </div>
               ))}

@@ -79,11 +79,13 @@ export async function listInbox() { return rpc('listInbox'); }
 export async function markInboxRead() { return rpc('markInboxRead'); }
 export async function listThreads() { return rpc('listThreads'); }
 export async function markThreadRead(playerId, withId) { return rpc('markThreadRead', { withId }); }
+export async function deleteMessage(playerId, messageId) { return rpc('deleteMessage', { messageId }); }
 
 // ---- trades + gifts ----
 export async function proposeTrade(fromId, toId, offeredItemId, requestedItemId) { return rpc('proposeTrade', { toId, offeredItemId, requestedItemId }); }
 export async function listTrades() { return rpc('listTrades'); }
 export async function respondTrade(tradeId, accept) { return rpc('respondTrade', { tradeId, accept }); }
+export async function retractTrade(playerId, tradeId) { return rpc('retractTrade', { tradeId }); }
 export async function giftItem(fromId, toId, itemId) { return rpc('giftItem', { toId, itemId }); }
 
 // ---- announcements (admin broadcast → News tab) ----
