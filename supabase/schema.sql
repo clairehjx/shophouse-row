@@ -33,8 +33,11 @@ create table if not exists shops (
   greeting      text,
   interior      jsonb not null default '[]',         -- ground-floor placements
   interior2     jsonb not null default '[]',         -- 2nd-floor placements
+  interior_theme text,                               -- chosen interior theme (null = match shop)
   updated_at    timestamptz not null default now()
 );
+-- Additive for existing projects (introduced with the interior upgrade):
+alter table shops add column if not exists interior_theme text;
 
 create table if not exists inventory (
   player_id   text not null references players(id) on delete cascade,

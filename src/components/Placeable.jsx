@@ -6,10 +6,10 @@ import { spriteSize } from '../pixel/engine.js';
 export default function Placeable({ id, creations = [], scale = 3, className, style }) {
   const sprite = placeableSprite(id, creations);
   if (!sprite) return null;
-  const { h } = spriteSize(sprite);
+  const { w, h } = spriteSize(sprite);
   return (
     <PixelCanvas
-      width={12} height={Math.max(h, 1)} scale={scale}
+      width={Math.max(w, 12)} height={Math.max(h, 1)} scale={scale}
       layers={[{ sprite, palette: ITEM_PALETTE }]}
       className={className} style={style}
     />

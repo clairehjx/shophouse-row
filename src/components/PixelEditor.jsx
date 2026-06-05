@@ -57,7 +57,7 @@ export default function PixelEditor({ onSave, templates = [] }) {
       {/* Template picker */}
       {templates.length > 0 && (
         <div className="mb-3">
-          <span className="pixel-text text-[10px] text-inksoft">Start from one of your items (template)</span>
+          <span className="pixel-text text-[10px] text-inksoft">Start from a floor-tile pattern (or your own)</span>
           <div className="flex flex-wrap gap-1.5 mt-1 max-h-24 overflow-y-auto">
             <button onClick={() => setGrid(EMPTY())} title="Blank"
               className="px-2 h-9 rounded-lg border-2 border-parch bg-cream text-xs text-inksoft">Blank</button>

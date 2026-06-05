@@ -36,7 +36,7 @@ export const mapPlayer = (p) => ({
 const mapShop = (s) => s && ({
   ownerId: s.owner_id, signText: s.sign_text, awningColor: s.awning_color, wallColor: s.wall_color,
   roofColor: s.roof_color, facadeItem: s.facade_item, greeting: s.greeting,
-  interior: s.interior || [], interior2: s.interior2 || [],
+  interior: s.interior || [], interior2: s.interior2 || [], interiorTheme: s.interior_theme || null,
 });
 
 async function invAdd(db, playerId, itemId, qty) {
@@ -51,7 +51,7 @@ async function invRemove(db, playerId, itemId, all) {
   else await db.from('inventory').update({ qty: data.qty - 1 }).eq('player_id', playerId).eq('item_id', itemId);
   return true;
 }
-const COL = { signText: 'sign_text', awningColor: 'awning_color', wallColor: 'wall_color', roofColor: 'roof_color', facadeItem: 'facade_item', greeting: 'greeting', interior: 'interior', interior2: 'interior2' };
+const COL = { signText: 'sign_text', awningColor: 'awning_color', wallColor: 'wall_color', roofColor: 'roof_color', facadeItem: 'facade_item', greeting: 'greeting', interior: 'interior', interior2: 'interior2', interiorTheme: 'interior_theme' };
 
 async function isAdmin(db, me) {
   const { data } = await db.from('players').select('is_admin').eq('id', me).maybeSingle();

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import PixelCanvas from '../components/PixelCanvas.jsx';
 import ItemSprite from '../components/ItemSprite.jsx';
 import Avatar from '../components/Avatar.jsx';
-import InteriorRoom from '../components/InteriorRoom.jsx';
 import ShelfGrid from '../components/ShelfGrid.jsx';
 import ShopRoom from '../components/ShopRoom.jsx';
 import Placeable from '../components/Placeable.jsx';
@@ -10,8 +9,10 @@ import PixelEditor from '../components/PixelEditor.jsx';
 import { drawShophouse, SHOP_W, SHOP_H, SHOP_TYPE_MAP, AWNING_COLORS } from '../pixel/shophouse.js';
 import {
   resolveItem, shelfDefForShop, shelfItemsFromInventory, DECOR_ITEMS, SHOP_SIGNATURE_SPRITE,
-  placeableName, placeableSprite, setCreationsRegistry, SHELF_COLORS,
+  placeableName, placeableSprite, setCreationsRegistry, SHELF_COLORS, isFurniture, isFloorTile, rotatePlacement,
+  FLOOR_TILE_TEMPLATES,
 } from '../pixel/items.js';
+import { THEMES, defaultThemeFor } from '../pixel/themes.js';
 import api from '../data/api.js';
 
 const SIGN_MAX = 16;
@@ -72,18 +73,25 @@ export default function MyShop({ player, onBack, toast }) {
   // You decorate with the decorations in YOUR bag (saved creations); stock images
   // are only starting templates in the editor below.
   const ownedDecor = inv.filter((i) => typeof i.itemId === 'string' && i.itemId.startsWith('creation:'));
-  const placeableIds = ownedDecor.map((i) => i.itemId);
   const placements = editFloor === 1 ? interior : interior2;
+  // Editor palette: furniture (solid) and your floor tiles (custom pixel creations).
+  const furnitureOwned = inv.filter((i) => isFurniture(i.itemId));
+  const tilesOwned = inv.filter((i) => isFloorTile(i.itemId));
 
-  // Editor templates: stock images + any of your own items, but only one per unique
-  // sprite (e.g. all candy flavours share one sprite → show it once).
+  // Floor Tile Designer templates: built-in floor-tile examples + the player's own saved
+  // tiles (creations). No furniture / decor / shelf goods — this designs FLOOR tiles.
   const templates = [];
   const seenSprites = new Set();
-  for (const id of [...DECOR_ITEMS, ...inv.map((i) => i.itemId)]) {
-    const sprite = placeableSprite(id, creations);
+  for (const t of FLOOR_TILE_TEMPLATES) {
+    if (seenSprites.has(t.sprite)) continue;
+    seenSprites.add(t.sprite);
+    templates.push(t);
+  }
+  for (const { itemId } of ownedDecor) {
+    const sprite = placeableSprite(itemId, creations);
     if (!sprite || seenSprites.has(sprite)) continue;
     seenSprites.add(sprite);
-    templates.push({ id, name: placeableName(id, creations), sprite });
+    templates.push({ id: itemId, name: placeableName(itemId, creations), sprite });
   }
 
   async function addShelfItem(e) {
@@ -119,20 +127,30 @@ export default function MyShop({ player, onBack, toast }) {
     else { setInterior2(next); api.saveShop(player.id, { interior2: next }); }
   }
   // Placing an item takes it OUT of the bag; picking it back up returns it (so it
-  // can be gifted/traded again only when it's back in the bag).
-  async function onCell(c, r) {
-    const at = placements.find((p) => p.c === c && p.r === r);
-    if (at) {
-      saveInterior(placements.filter((p) => !(p.c === c && p.r === r)));
-      await api.addInventoryItem(player.id, at.itemId, 1);
-      await loadInventory();
-    } else if (selected) {
-      const owned = inv.find((i) => i.itemId === selected)?.qty || 0;
-      if (owned <= 0) { toast?.('None left — pick one back up to place it again.'); return; }
-      saveInterior([...placements, { itemId: selected, c, r }]);
-      await api.removeInventoryItem(player.id, selected, false);
-      await loadInventory();
-    }
+  // can be gifted/traded again only when it's back in the bag). Free {x,y} placement.
+  async function onPlace(itemId, x, y) {
+    const owned = inv.find((i) => i.itemId === itemId)?.qty || 0;
+    if (owned <= 0) { toast?.('None left — pick one back up to place it again.'); return; }
+    saveInterior([...placements, { itemId, x, y }]);
+    await api.removeInventoryItem(player.id, itemId, false);
+    await loadInventory();
+  }
+  function onMove(i, x, y) {
+    // Upgrade the moved entry to the clean {itemId,x,y,rot} shape (lazy migration; keep rot).
+    saveInterior(placements.map((p, j) => (j === i ? { itemId: p.itemId, x, y, rot: p.rot || 0 } : p)));
+  }
+  function onRotate(i) {
+    // Rotate one quarter-turn about its centre, then re-clamp (handled in rotatePlacement).
+    if (!placements[i]) return;
+    const next = rotatePlacement(placements[i], creations);
+    saveInterior(placements.map((p, j) => (j === i ? next : p)));
+  }
+  async function onPickup(i) {
+    const it = placements[i];
+    if (!it) return;
+    saveInterior(placements.filter((_, j) => j !== i));
+    await api.addInventoryItem(player.id, it.itemId, 1);
+    await loadInventory();
   }
   async function clearRoom() {
     for (const p of placements) await api.addInventoryItem(player.id, p.itemId, 1); // return everything
@@ -227,43 +245,10 @@ export default function MyShop({ player, onBack, toast }) {
             </div>
           </div>
 
-          {/* Interior decorator — ground floor + private 2nd floor */}
-          <div className="panel p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="pixel-text text-xs text-inksoft">Decorate</h2>
-              <div className="flex rounded-lg overflow-hidden border-2 border-parch">
-                <button onClick={() => setEditFloor(1)}
-                  className={`pixel-text text-[10px] px-2 py-1 ${editFloor === 1 ? 'bg-peach text-paper' : 'bg-cream text-inksoft'}`}>Floor 1</button>
-                <button onClick={() => setEditFloor(2)}
-                  className={`pixel-text text-[10px] px-2 py-1 ${editFloor === 2 ? 'bg-peach text-paper' : 'bg-cream text-inksoft'}`}>🛏️ Floor 2</button>
-              </div>
-            </div>
-            <InteriorRoom placements={placements} creations={creations} editable onCell={onCell} />
-            <p className="text-xs text-inksoft text-center my-2">
-              Pick an item, tap a square to place it. Tap a placed item to pick it back up.
-            </p>
-            {placeableIds.length === 0 ? (
-              <p className="text-xs text-inksoft text-center">No decorations yet — make some in <strong>Make your own 🎨</strong> below (or use a stock image as a template), then place them here.</p>
-            ) : (
-              <div className="flex flex-wrap gap-1.5 justify-center">
-                {placeableIds.map((id) => (
-                  <button key={id} onClick={() => setSelected(id)} title={placeableName(id, creations)}
-                    className={`p-1 rounded-lg border-2 ${selected === id ? 'border-peach bg-paper scale-105' : 'border-parch bg-cream'}`}>
-                    <Placeable id={id} creations={creations} scale={2} />
-                  </button>
-                ))}
-              </div>
-            )}
-            {placements.length > 0 && (
-              <div className="text-center mt-3">
-                <button onClick={clearRoom} className="cozy-btn-ghost text-xs">🧹 Clear room (return to bag)</button>
-              </div>
-            )}
-          </div>
-
-          {/* Unique shelf — every shop can create its own named goods to sell/trade. */}
+          {/* Unique shelf — every shop can create its own named goods to sell/trade.
+              Sits to the right of Shop front (both single-column on md+). */}
           {shelfDef && (
-            <div className="panel p-5 md:col-span-2">
+            <div className="panel p-5">
               <h2 className="pixel-text text-xs text-inksoft mb-3">Your {shelfDef.label.toLowerCase()} ✨</h2>
               <ShelfGrid items={shelfItems} empty={`No ${shelfDef.noun}s on the shelf yet — add some below!`} />
               <form onSubmit={addShelfItem} className="mt-4">
@@ -304,13 +289,89 @@ export default function MyShop({ player, onBack, toast }) {
             </div>
           )}
 
-          {/* Pixel editor — draw your own items to place in your shop */}
+          {/* Interior decorator — drag furniture, design floor tiles, theme the room */}
           <div className="panel p-5 md:col-span-2">
-            <h2 className="pixel-text text-xs text-inksoft mb-3">Make your own 🎨</h2>
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <h2 className="pixel-text text-xs text-inksoft">Decorate</h2>
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-1">
+                  <span className="pixel-text text-[10px] text-inksoft mr-1">Theme</span>
+                  <button onClick={() => saveFacade({ interiorTheme: null })} title="Match my shop"
+                    className={`w-6 h-6 rounded-full border-[3px] ${!shop.interiorTheme ? 'border-ink scale-110' : 'border-paper'}`}
+                    style={{ background: defaultThemeFor(player.shopType).wall }} />
+                  {Object.entries(THEMES).map(([key, t]) => (
+                    <button key={key} onClick={() => saveFacade({ interiorTheme: key })} title={key}
+                      className={`w-6 h-6 rounded-full border-[3px] ${shop.interiorTheme === key ? 'border-ink scale-110' : 'border-paper'}`}
+                      style={{ background: t.wall }} />
+                  ))}
+                </div>
+                <div className="flex rounded-lg overflow-hidden border-2 border-parch">
+                  <button onClick={() => setEditFloor(1)}
+                    className={`pixel-text text-[10px] px-2 py-1 ${editFloor === 1 ? 'bg-peach text-paper' : 'bg-cream text-inksoft'}`}>Floor 1</button>
+                  <button onClick={() => setEditFloor(2)}
+                    className={`pixel-text text-[10px] px-2 py-1 ${editFloor === 2 ? 'bg-peach text-paper' : 'bg-cream text-inksoft'}`}>🛏️ Floor 2</button>
+                </div>
+              </div>
+            </div>
+
+            <ShopRoom
+              owner={player} walker={player.avatar}
+              shop={{ ...shop, interior, interior2 }}
+              ownerInv={inv} creations={creations} isOwn
+              editable selected={selected} editFloor={editFloor}
+              onPlace={onPlace} onMove={onMove} onPickup={onPickup} onRotate={onRotate} toast={toast}
+            />
+
+            <div className="mt-3">
+              {(furnitureOwned.length + tilesOwned.length) === 0 ? (
+                <p className="text-xs text-inksoft text-center">No furniture or floor tiles in your bag yet — design floor tiles in <strong>Make your own 🎨</strong> below, then tap one and place it.</p>
+              ) : (
+                <>
+                  {furnitureOwned.length > 0 && (
+                    <div className="mb-2">
+                      <span className="pixel-text text-[10px] text-inksoft">Furniture (walk around it)</span>
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {furnitureOwned.map(({ itemId, qty }) => (
+                          <button key={itemId} onClick={() => setSelected(selected === itemId ? null : itemId)} title={`${placeableName(itemId, creations)} ×${qty}`}
+                            className={`p-1 rounded-lg border-2 ${selected === itemId ? 'border-peach bg-paper scale-105' : 'border-parch bg-cream'}`}>
+                            <Placeable id={itemId} creations={creations} scale={2} />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {tilesOwned.length > 0 && (
+                    <div>
+                      <span className="pixel-text text-[10px] text-inksoft">Floor tiles (walk on them)</span>
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {tilesOwned.map(({ itemId, qty }) => (
+                          <button key={itemId} onClick={() => setSelected(selected === itemId ? null : itemId)} title={`${placeableName(itemId, creations)} ×${qty}`}
+                            className={`p-1 rounded-lg border-2 ${selected === itemId ? 'border-peach bg-paper scale-105' : 'border-parch bg-cream'}`}>
+                            <Placeable id={itemId} creations={creations} scale={2} />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {placements.length > 0 && (
+              <div className="text-center mt-3">
+                <button onClick={clearRoom} className="cozy-btn-ghost text-xs">🧹 Clear room (return to bag)</button>
+              </div>
+            )}
+          </div>
+
+          {/* Floor Tile Designer — draw your own pixel floor tiles to lay in your shop */}
+          <div className="panel p-5 md:col-span-2">
+            <h2 className="pixel-text text-xs text-inksoft mb-1">Floor Tile Designer 🎨</h2>
+            <p className="text-xs text-inksoft mb-3">Draw a tile — it goes in your bag, then lay it on the floor (furniture sits on top). You can trade or gift tiles too.</p>
             <PixelEditor onSave={saveCreation} templates={templates} />
             {ownedDecor.length > 0 && (
               <div className="mt-4">
-                <span className="pixel-text text-[10px] text-inksoft">Your decorations (in your bag — place, trade or gift them)</span>
+                <span className="pixel-text text-[10px] text-inksoft">Your floor tiles (in your bag — place, trade or gift them)</span>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {ownedDecor.map(({ itemId, qty }) => (
                     <div key={itemId} className="bg-cream border-2 border-parch rounded-xl p-2 w-[88px] flex flex-col items-center">

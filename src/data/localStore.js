@@ -4,7 +4,7 @@
 // Supabase serverless calls WITHOUT changing api.js or the screens.
 import { hashCode } from './hash.js';
 import { SHOP_TYPES } from '../pixel/shophouse.js';
-import { startingInventory, resolveItem } from '../pixel/items.js';
+import { startingInventory, resolveItem, FURNITURE_IDS } from '../pixel/items.js';
 import { randomAvatar } from '../pixel/avatar.js';
 import { planBeat } from './sessionLogic.js';
 
@@ -150,7 +150,8 @@ export async function ensureSeeded() {
           interior2: [], // second-floor placements
         }
       : { ownerId: r.id, ...VACANT, facadeItem: null, greeting: '', interior: [], interior2: [] };
-    inventory[r.id] = demo ? startingInventory(demo.shopType) : [];
+    // Demo players also get a couple of each furniture piece so the drag editor is testable.
+    inventory[r.id] = demo ? [...startingInventory(demo.shopType), ...FURNITURE_IDS.map((id) => ({ itemId: id, qty: 2 }))] : [];
   }
   state = { players, codes, shops, inventory, creations: {}, messages: [], trades: [], announcements: [], sessions: [], session: null, seq: 1 };
   // Sample conversations + a trade so the social loop is testable the moment you log in.
@@ -189,6 +190,11 @@ async function seedFromSnapshot() {
   // Make sure every player has an inventory array and every shop has both floors.
   for (const id of Object.keys(state.players)) if (!state.inventory[id]) state.inventory[id] = [];
   for (const s of Object.values(state.shops)) { if (!s.interior) s.interior = []; if (!s.interior2) s.interior2 = []; }
+  // Local-testing convenience: top up every player with the new furniture so it shows in
+  // the Decorate palette (the live snapshot predates furniture). addToInv merges, so real
+  // pulled inventory is untouched. Has no effect in production (cloudStore is used there).
+  for (const id of Object.keys(state.players))
+    for (const itemId of FURNITURE_IDS) addToInv(state.inventory[id], itemId, 2);
   save();
 }
 

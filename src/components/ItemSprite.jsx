@@ -6,10 +6,10 @@ import { spriteSize } from '../pixel/engine.js';
 export default function ItemSprite({ id, scale = 3, className, style }) {
   const item = resolveItem(id);
   if (!item) return null;
-  const { h } = spriteSize(item.sprite);
+  const { w, h } = spriteSize(item.sprite);
   return (
     <PixelCanvas
-      width={12}
+      width={Math.max(w, 12)}
       height={Math.max(h, 1)}
       scale={scale}
       layers={[{ sprite: item.sprite, palette: item.palette || ITEM_PALETTE }]}

@@ -18,6 +18,17 @@ export const ICON_PALETTE = {
   n: '#a9764f', // brown
   t: '#6fc6c0', // teal
   s: '#dfe8ef', // silver/glass
+  // --- furniture shades (additive; see InteriorPlan.MD). Never remove a key. ---
+  N: '#6f4a30', // dark wood (legs / shadow side)
+  W: '#c79468', // light wood / highlight
+  d: '#3a2c22', // deep shadow (darker than k); also AO + stair top-fade
+  f: '#d98aa8', // rose fabric midtone
+  F: '#b56b86', // rose fabric shadow
+  l: '#fbe6c0', // warm cream highlight (linens, lamp glow, stair lip)
+  e: '#8a9b7a', // sage (plants, upholstery)
+  E: '#5e6f4f', // sage shadow
+  S: '#9aa0ab', // stone light (lit stair tread)
+  x: '#5d6470', // stone shadow (stair riser)
 };
 
 // 🍰 Bakery — cake slice with cherry
